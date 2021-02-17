@@ -4,12 +4,12 @@
 #Email: The404Hacking.Team@Gmail.Com
 #GitHub: https://github.com/The404Hacking/XsSCan
 
-import mechanize
-import sys
-import httplib
 import argparse
 import logging
-from urlparse import urlparse
+
+import mechanize
+import requests
+from url_normalize import url_normalize
 
 br = mechanize.Browser()  # initiating the browser
 br.addheaders = [
@@ -98,6 +98,12 @@ def testPayload(payload, p, link):
     br.back()
 
 
+def testHostConnection(domain, default_scheme):
+    url = url_normalize(str(domain), default_scheme=default_scheme)
+    resp = requests.get(str(url))
+    return resp.url
+
+
 def initializeAndFind():
 
     if not results.url:    # if the url has been passed or not
@@ -116,18 +122,14 @@ def initializeAndFind():
     # Test HTTPS/HTTP compatibility. Prefers HTTPS but defaults to
     # HTTP if any errors are encountered
         try:
-            test = httplib.HTTPSConnection(smallurl)
-            test.request("GET", "/")
-            response = test.getresponse()
-            if (response.status == 200) | (response.status == 302):
-                url = "https://www." + str(url)
-            elif response.status == 301:
-                loc = response.getheader('Location')
-                url = loc.scheme + '://' + loc.netloc
-            else:
-                url = "http://www." + str(url)
+            try:
+                url = testHostConnection(domain=url, default_scheme='http')
+                firstDomains.append(url)
+            except:
+                url = testHostConnection(domain=url, default_scheme='https')
+                firstDomains.append(url)
         except:
-            url = "http://www." + str(url)
+            continue
         try:
             br.open(url)
             for cookie in results.cookies:
@@ -183,7 +185,6 @@ def findxss(firstDomains):
                     br.open(str(link))    # open the link
                     if br.forms():        # if a form exists, submit it
                         params = list(br.forms())[0]    # our form
-                        br.select_form(nr=0)    # submit the first form
                         for p in params.controls:
                             par = str(p)
                             # submit only those forms which require text
@@ -191,6 +192,7 @@ def findxss(firstDomains):
                                 color.log(logging.DEBUG, color.YELLOW,
                                           '\tParam: ' + str(p.name))
                                 for item in payloads:
+                                    br.select_form(nr=0)  # submit the first form
                                     testPayload(item, p, link)
                 except:
                     pass
